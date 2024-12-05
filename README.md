@@ -3617,3 +3617,329 @@ const styles = StyleSheet.create({
   }
 })
 ```
+
+---
+
+# Data Persistence in Mobile Applications: SQLite vs. AsyncStorage
+
+Mobile application users have certain expectations regarding their user experience. When users enter data into a mobile app, they expect the process to be seamless. If the app crashes or the user exits unexpectedly, they want their information, such as preferences and personal data, to be saved until they reopen the application. This is crucial for ensuring the smooth operation of a mobile app.
+
+For apps that require complex data handling, persistence becomes critical. This is where storage mechanisms like **SQLite** and **AsyncStorage** come into play. In this guide, we'll explore both, highlighting the key features and differences, and help you decide which is best suited for your application needs.
+
+## Introduction to SQLite
+
+**SQLite** is a **free, open-source, and lightweight relational database management system** (RDBMS). It is a popular choice for small applications, especially on mobile devices. Unlike traditional SQL databases, SQLite is file-based and operates without a server, making it ideal for mobile applications that require a lightweight, embedded database.
+
+SQLite stores data in tables related to one another and uses **SQL** (Structured Query Language) to manipulate and query the data. It is particularly favored because it is embedded directly within the app, without the need for a separate server process.
+
+### Key Features of SQLite
+
+- **Free and Open Source**: Anyone can download and use SQLite without licensing fees.
+- **Lightweight**: SQLite is small in size (usually a few hundred kilobytes) and does not impact the overall bundle size of a mobile app significantly.
+- **Easy to Use**: No configuration is required when setting up SQLite, unlike other relational database solutions.
+- **Fast Performance**: SQLite can process millions of records in just a few seconds, offering quick database interactions for mobile apps.
+- **Reliable**: SQLite is stable and crash-resistant, providing a reliable solution for mobile data storage.
+
+### SQLite Use Cases
+
+SQLite is well-suited for applications that need to store large amounts of structured data, such as:
+
+- User profiles and preferences
+- Product catalogs
+- Offline data storage for mobile apps
+
+## Introduction to AsyncStorage
+
+**AsyncStorage** is a **simple key-value storage system** designed for React Native applications. It allows you to store simple data in the form of key-value pairs, providing a straightforward API for saving and retrieving data.
+
+Unlike SQLite, AsyncStorage is not a relational database. It is best suited for storing small amounts of data, like user preferences or session data, that don't require complex relationships between different data points.
+
+### Key Features of AsyncStorage
+
+- **Simple API**: AsyncStorage offers a simple and easy-to-understand JavaScript API, with methods like `setItem`, `getItem`, and `removeItem`.
+- **Asynchronous**: AsyncStorage is asynchronous, meaning it doesn't block the JavaScript thread during data operations.
+- **Cross-Platform**: It works seamlessly across Android and iOS, making it an excellent choice for mobile app developers.
+
+### AsyncStorage Use Cases
+
+AsyncStorage is best for applications that need to store simple data, such as:
+
+- User authentication tokens
+- App settings and preferences
+- Simple data caches
+
+## Key Differences: SQLite vs. AsyncStorage
+
+| Feature                   | SQLite                                | AsyncStorage                            |
+| ------------------------- | ------------------------------------- | --------------------------------------- |
+| **Type of Storage**       | Relational Database Management System | Key-Value Store                         |
+| **Data Structure**        | Tables with relationships             | Simple key-value pairs                  |
+| **Language**              | SQL                                   | JavaScript API                          |
+| **Complexity**            | Suitable for complex data             | Simple, for basic use cases             |
+| **Performance**           | Fast for large datasets               | Suitable for small datasets             |
+| **Setup & Configuration** | Requires setup and knowledge of SQL   | Simple setup, no SQL knowledge required |
+
+### When to Use SQLite
+
+- When your app needs to handle complex, structured data with relationships between entities.
+- When you need high performance for large datasets or frequent queries.
+- When your app requires persistent storage that can handle substantial amounts of data.
+
+### When to Use AsyncStorage
+
+- When your app needs to store small amounts of simple data, such as user preferences or settings.
+- When you want a quick and easy solution without the complexity of SQL databases.
+- When you don’t need complex querying or relational data management.
+
+## Conclusion
+
+In this guide, you learned about **SQLite** and **AsyncStorage** as local storage solutions for React Native applications. We explored the key features and differences between them, helping you decide which option to use based on the complexity and requirements of your application.
+
+- **AsyncStorage** is ideal for small, simple data storage needs.
+- **SQLite** is a better choice when your app needs to store more complex, structured data.
+
+Choose the storage solution that best fits your needs to ensure your app offers a smooth, reliable user experience.
+
+---
+
+# Expo-SQLite in Detail
+
+In a previous video, you learned about **Expo-SQLite** and how to set it up in your React Native applications. In this reading, you’ll delve into more detail about SQLite, explore an example of code interacting with a database containing a menu, and learn how to use all CRUD operations when interacting with the SQLite database.
+
+## SQLite at a Glance
+
+Recall that the `expo-sqlite` module offers an SQL database with a Web-SQL-based interface. This is powerful because it supports most of the features of SQLite. SQLite is also well-suited for applications with offline requirements, facilitating the storage of large chunks of structured data on disk and allowing you to read only the parts needed for displaying the current screen of information.
+
+However, the **Expo-SQLite API** can be cumbersome to deal with, so the learning curve might feel a bit steeper for some developers. This presents an opportunity to showcase best practice principles, including placing queries in your codebase and building a user-friendly API on top of Expo-SQLite, which React Native components can use.
+
+### Example: CRUD Operations
+
+Let’s walk through an example of CRUD operations using SQLite in a React Native application. In this example, the database contains a **menu table**, which stores different dishes. Each entry in the table contains the dish name and its unique dish ID.
+
+---
+
+### **Reading and Writing Data with SQLite**
+
+Since reading and writing are core to every application that manages data, let’s start there.
+
+To follow good practices for code organization, place all the queries in a single file called `database.js`. This makes it easy to swap out the database for testing or if you decide to replace SQLite with another storage solution later.
+
+#### Example Code for Retrieving Dishes:
+
+```javascript
+const getDishes = (successCallback) => {
+  db.transaction((tx) => {
+    tx.executeSql('select * from menu', [], (_, { rows: { _array } }) => {
+      successCallback(_array)
+    })
+  })
+}
+```
+
+Notice the `getDishes` function highlights a great design feature: keeping your queries isolated from React-specific concepts like `props` or `state`. By using a callback function (`successCallback`), the query execution is separated from React, making it easy to update the UI with the fetched data.
+
+#### Example Code for Displaying Dishes in the UI:
+
+```javascript
+const MenuList = () => {
+  const [menuItems, setMenuItems] = useState([])
+
+  useEffect(() => {
+    getDishes(setMenuItems)
+  }, [])
+
+  return <ListView data={menuItems} />
+}
+```
+
+### **Inserting New Dishes into the Database**
+
+Now, let’s create a function to insert new dishes into the database. The `insertDish` function takes a `dishName` as a parameter and inserts it into the `menu` table.
+
+#### Example Code for Inserting a Dish:
+
+```javascript
+const insertDish = (dishName) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(
+      (tx) => {
+        tx.executeSql('insert into menu (name) values (?)', [dishName])
+      },
+      reject,
+      resolve
+    )
+  })
+}
+```
+
+The `insertDish` function is wrapped in a promise, enabling the use of the `await` keyword in the caller. This allows you to handle asynchronous operations cleanly.
+
+#### Example Code for Calling Insert Function:
+
+```javascript
+const insertData = async (dishName) => {
+  try {
+    await insertDish(dishName)
+  } catch (e) {
+    Alert.alert(`Error inserting ${dishName}`, e.message)
+  }
+}
+```
+
+### **Updating and Deleting Data with SQLite**
+
+Finally, let’s complete the example with the two remaining CRUD operations: **update** and **delete**.
+
+#### Example Code for Updating a Dish:
+
+To update a dish name, define a function that takes the `dishId` as the first parameter, then updates the corresponding entry in the `menu` table.
+
+```javascript
+const updateDish = async (dishId, newName) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(
+      (tx) => {
+        tx.executeSql(`update menu set name=? where uid=${dishId}`, [newName])
+      },
+      reject,
+      resolve
+    )
+  })
+}
+```
+
+#### Example Code for Deleting a Dish:
+
+To delete a dish from the menu, define the `deleteDish` function:
+
+```javascript
+const deleteDish = async (dishId) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(
+      (tx) => {
+        tx.executeSql('delete from menu where id = ?', [dishId])
+      },
+      reject,
+      resolve
+    )
+  })
+}
+```
+
+---
+
+## Conclusion
+
+In this reading, you delved deeper into SQLite by exploring an example of code interacting with a database containing a menu. You learned how to execute all CRUD operations to **read**, **write**, **update**, and **delete** data when interacting with the SQLite database.
+
+By following the code examples provided, you should now have a solid understanding of how to set up SQLite, organize your database queries, and interact with your data efficiently in React Native apps.
+
+---
+
+# **Little Lemon - Customer Registry with SQLite**
+
+Adrian wants to improve how the customer data is stored in the **Little Lemon** app. Previously, AsyncStorage was used to persist the data. However, with the expectation of adding features like querying customers by location or age, a more structured storage solution is needed. For this reason, the decision was made to replace AsyncStorage with **SQLite**.
+
+In this guide, you will learn how to implement a customer registry using SQLite instead of AsyncStorage. The goal is to have a robust and fast querying mechanism to store customer data on disk, providing flexibility for future features.
+
+---
+
+## **Objective**
+
+The task is to change the storage mechanism for keeping track of customers dining in at **Little Lemon**. Here's what needs to be done:
+
+- Replace **AsyncStorage** with **SQLite** for persisting customer data.
+- Implement a structured database to store customer information such as name, age, and location.
+- Ensure that the application can efficiently query customer data for future enhancements.
+
+---
+
+## **Steps to Implement SQLite in the Little Lemon App**
+
+### **1. Open a Database**
+
+The first step is to open the SQLite database at the top of your file. Here, we'll call the database `Little_Lemon`.
+
+```javascript
+import * as SQLite from 'expo-sqlite'
+
+const db = SQLite.openDatabase('Little_Lemon.db')
+```
+
+### **2. Create a Table for Customers**
+
+We need a table to store customer data. In this case, we only need two fields: an ID and a name.
+
+We'll create the table inside a `useEffect` hook, which ensures it’s created only once when the app first loads.
+
+```javascript
+useEffect(() => {
+  db.transaction((tx) => {
+    tx.executeSql(
+      'create table if not exists customers (id integer primary key not null, name text);'
+    )
+  })
+}, [])
+```
+
+This table will hold all customers who are dining in at the restaurant.
+
+### **3. Storing Customer Data**
+
+Instead of using a separate `useEffect` to save the data, we'll save new customers right when they press the "Save" button. This avoids unnecessary updates and keeps the database insertion isolated.
+
+```javascript
+const saveCustomer = (name) => {
+  db.transaction(
+    (tx) => {
+      tx.executeSql('insert into customers (name) values (?)', [name])
+    },
+    null,
+    () => {
+      // Optionally handle success
+    }
+  )
+}
+```
+
+The above code executes an `INSERT` SQL statement to add new customers into the `customers` table. The `?` is a placeholder to prevent SQL injection attacks, where malicious code could be executed by injecting SQL statements.
+
+### **4. Retrieving Customer Data on App Startup**
+
+To load the customer data when the app starts, we need to fetch all the entries from the `customers` table. This can be done in another `useEffect` hook, which will be run once after the initial render.
+
+```javascript
+useEffect(() => {
+  db.transaction((tx) => {
+    tx.executeSql('select * from customers', [], (_, { rows }) => {
+      const customerNames = rows._array.map((row) => row.name)
+      setCustomers(customerNames)
+    })
+  })
+}, [])
+```
+
+In this SQL statement, we retrieve all customers from the database. The result is passed into the callback, and the customer names are extracted and set into the local state using the `setCustomers` function.
+
+### **5. Testing the Application**
+
+To test the implementation:
+
+1. Enter customer names in the text input box and click the "Save Customer" button.
+2. The names should be added to the list below.
+3. Exit the app and restart it.
+4. Upon restart, the app should load the previously saved customer data.
+
+---
+
+## **Conclusion**
+
+In this guide, you learned how to replace **AsyncStorage** with **SQLite** to manage customer data in the **Little Lemon** app. By using SQLite, you can now store data in a structured format, easily query it, and ensure persistence even when the app is restarted. This approach not only provides better performance for filtering and querying data, but also prepares the app for future feature additions.
+
+---
+
+## **Future Improvements**
+
+- **Query by Location or Age**: Add new fields to the customers table (e.g., location, age) and implement SQL queries to filter customers based on these attributes.
+- **Data Validation**: Implement better validation to ensure data integrity when saving or updating customers.
+- **Optimized Queries**: For large datasets, optimize queries to fetch data efficiently.
