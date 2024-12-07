@@ -1,114 +1,157 @@
-import React, { useState, useEffect } from 'react'
-import { Text, View, StyleSheet, Alert } from 'react-native'
-import Constants from 'expo-constants'
-import { Switch } from 'react-native-paper'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+// App.tsx
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import {
+  SafeAreaView,
+  SectionList,
+  Text,
+  StyleSheet,
+  Alert,
+  StatusBar
+} from 'react-native'
+import {
+  createTable,
+  getMenuItems,
+  saveMenuItems,
+  filterByQueryAndCategories
+} from '@/database/database'
+import { getSectionListData, useUpdateEffect } from '@/utils/utils'
+import { MenuItem, Section } from '@/utils/types'
+import SearchBar from '@/components/SearchBar'
+import Filters from '@/components/Filters'
+import Item from '@/components/Item'
 
-import useUpdateEffect from '@/Hooks/useUpdateEffect'
-
-interface Preferences {
-  pushNotifications: boolean
-  emailMarketing: boolean
-  latestNews: boolean
-}
+const API_URL =
+  'https://raw.githubusercontent.com/Meta-Mobile-Developer-PC/Working-With-Data-API/main/menu-items-by-category.json'
+const sections = ['Appetizers', 'Salads', 'Beverages']
 
 export default function App() {
-  const [preferences, setPreferences] = useState<Preferences>({
-    pushNotifications: false,
-    emailMarketing: false,
-    latestNews: false
-  })
+  const [data, setData] = useState<Section[]>([])
+  const [searchBarText, setSearchBarText] = useState<string>('')
+  const [query, setQuery] = useState<string>('')
+  const [filterSelections, setFilterSelections] = useState<boolean[]>(
+    sections.map(() => false)
+  )
+
+  const fetchData = async (): Promise<MenuItem[]> => {
+    try {
+      const response = await fetch(API_URL)
+      const data = await response.json()
+      return data.map(
+        (item: {
+          uuid: string
+          title: string
+          price: string
+          category: string
+        }) => ({
+          id: item.uuid,
+          title: item.title,
+          price: parseFloat(item.price),
+          category: item.category
+        })
+      )
+    } catch (error) {
+      console.error('Error fetching data:', error)
+      return []
+    }
+  }
 
   useEffect(() => {
-    // Populating preferences from storage using AsyncStorage.multiGet
     ;(async () => {
       try {
-        const keys = Object.keys(preferences)
-        const values = await AsyncStorage.multiGet(keys)
-        const initialState = values.reduce<Preferences>(
-          (acc, [key, value]) => {
-            if (key && value !== null) {
-              acc[key as keyof Preferences] = JSON.parse(value)
-            }
-            return acc
-          },
-          { ...preferences }
-        )
-        setPreferences(initialState)
-      } catch (e) {
-        Alert.alert(`An error occurred: ${(e as Error).message}`)
+        await createTable()
+        let menuItems = await getMenuItems()
+
+        if (!menuItems.length) {
+          const fetchedMenuItems = await fetchData()
+          saveMenuItems(fetchedMenuItems)
+          const sectionListData = getSectionListData(fetchedMenuItems)
+          setData(sectionListData)
+        } else {
+          const sectionListData = getSectionListData(menuItems)
+          setData(sectionListData)
+        }
+      } catch (e: any) {
+        Alert.alert(e.message)
       }
     })()
   }, [])
 
-  // This effect only runs when the preferences state updates, excluding initial mount
   useUpdateEffect(() => {
     ;(async () => {
-      const keyValues: [string, string][] = Object.entries(preferences).map(
-        ([key, value]) => [key, JSON.stringify(value)]
-      )
+      const activeCategories = sections.filter((s, i) => {
+        if (filterSelections.every((item) => item === false)) {
+          return true
+        }
+        return filterSelections[i]
+      })
+
       try {
-        await AsyncStorage.multiSet(keyValues)
-      } catch (e) {
-        Alert.alert(`An error occurred: ${(e as Error).message}`)
+        const menuItems = await filterByQueryAndCategories(
+          query,
+          activeCategories
+        )
+        const sectionListData = getSectionListData(menuItems)
+        setData(sectionListData)
+      } catch (e: any) {
+        Alert.alert(e.message)
       }
     })()
-  }, [preferences])
+  }, [filterSelections, query])
 
-  const updateState = (key: keyof Preferences) => () => {
-    setPreferences((prevState) => ({
-      ...prevState,
-      [key]: !prevState[key]
-    }))
+  const lookup = useCallback((q: string) => {
+    setQuery(q)
+  }, [])
+
+  const handleSearchChange = (text: string) => {
+    setSearchBarText(text)
+    lookup(text)
+  }
+
+  const handleFiltersChange = (index: number) => {
+    const arrayCopy = [...filterSelections]
+    arrayCopy[index] = !filterSelections[index]
+    setFilterSelections(arrayCopy)
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Account Preferences</Text>
-      <View style={styles.row}>
-        <Text style={styles.text}>Push notifications</Text>
-        <Switch
-          value={preferences.pushNotifications}
-          onValueChange={updateState('pushNotifications')}
-        />
-      </View>
-      <View style={styles.row}>
-        <Text style={styles.text}>Marketing emails</Text>
-        <Switch
-          value={preferences.emailMarketing}
-          onValueChange={updateState('emailMarketing')}
-        />
-      </View>
-      <View style={styles.row}>
-        <Text style={styles.text}>Latest news</Text>
-        <Switch
-          value={preferences.latestNews}
-          onValueChange={updateState('latestNews')}
-        />
-      </View>
-    </View>
+    <SafeAreaView style={styles.container}>
+      <SearchBar
+        searchText={searchBarText}
+        onSearchChange={handleSearchChange}
+      />
+      <Filters
+        selections={filterSelections}
+        onChange={handleFiltersChange}
+        sections={sections}
+      />
+      <SectionList
+        style={styles.sectionList}
+        sections={data}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }: { item: MenuItem }) => (
+          <Item title={item.title} price={item.price} />
+        )}
+        renderSectionHeader={({ section: { title } }) => (
+          <Text style={styles.header}>{title}</Text>
+        )}
+      />
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: Constants.statusBarHeight,
-    backgroundColor: '#ecf0f1',
-    padding: 16
+    paddingTop: StatusBar.currentHeight,
+    backgroundColor: '#495E57'
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 16
-  },
-  text: {
-    fontSize: 18
+  sectionList: {
+    paddingHorizontal: 16
   },
   header: {
-    margin: 24,
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center'
+    fontSize: 24,
+    paddingVertical: 8,
+    color: '#FBDABB',
+    backgroundColor: '#495E57'
   }
 })
